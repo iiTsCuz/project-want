@@ -28,9 +28,7 @@ function parseWant(query: string) {
   );
 
   const targetPrice = priceMatch
-    ? Number(
-        priceMatch[1].replace(",", ".")
-      )
+    ? Number(priceMatch[1].replace(",", "."))
     : null;
 
   const cleanedProduct = query
@@ -51,9 +49,7 @@ function parseWant(query: string) {
 
 function SearchContent() {
   const searchParams = useSearchParams();
-
-  const query =
-    searchParams.get("q") || "";
+  const query = searchParams.get("q") || "";
 
   const parsed = useMemo(
     () => parseWant(query),
@@ -83,27 +79,19 @@ function SearchContent() {
   const [offers, setOffers] =
     useState<Offer[]>([]);
 
-  const [
-    loadingOffers,
-    setLoadingOffers,
-  ] = useState(true);
+  const [loadingOffers, setLoadingOffers] =
+    useState(true);
 
-  const [
-    offersError,
-    setOffersError,
-  ] = useState("");
+  const [offersError, setOffersError] =
+    useState("");
 
   useEffect(() => {
     async function loadUser() {
       const {
         data: { session },
-      } =
-        await supabase.auth.getSession();
+      } = await supabase.auth.getSession();
 
-      setUser(
-        session?.user ?? null
-      );
-
+      setUser(session?.user ?? null);
       setLoadingUser(false);
     }
 
@@ -111,16 +99,12 @@ function SearchContent() {
 
     const {
       data: { subscription },
-    } =
-      supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          setUser(
-            session?.user ?? null
-          );
-
-          setLoadingUser(false);
-        }
-      );
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        setLoadingUser(false);
+      }
+    );
 
     return () => {
       subscription.unsubscribe();
@@ -145,21 +129,17 @@ function SearchContent() {
         );
 
         if (!response.ok) {
-          throw new Error(
-            "Search failed."
-          );
+          throw new Error("Search failed.");
         }
 
-        const data =
-          await response.json();
+        const data = await response.json();
 
         const receivedOffers: Offer[] =
           data.offers || [];
 
         setOffers(
           [...receivedOffers].sort(
-            (a, b) =>
-              a.price - b.price
+            (a, b) => a.price - b.price
           )
         );
       } catch (error) {
@@ -194,21 +174,17 @@ function SearchContent() {
 
     if (!user) {
       setMessageType("error");
-
       setMessage(
         "Sign in first to activate this WANT."
       );
-
       return;
     }
 
     if (!bestOffer) {
       setMessageType("error");
-
       setMessage(
         "Wait for the search to finish first."
       );
-
       return;
     }
 
@@ -221,18 +197,9 @@ function SearchContent() {
       } = await supabase
         .from("wants")
         .select("id")
-        .eq(
-          "user_id",
-          user.id
-        )
-        .eq(
-          "original_query",
-          query
-        )
-        .eq(
-          "status",
-          "active"
-        )
+        .eq("user_id", user.id)
+        .eq("original_query", query)
+        .eq("status", "active")
         .maybeSingle();
 
       if (existingError) {
@@ -240,79 +207,84 @@ function SearchContent() {
       }
 
       if (existingWant) {
-        const {
-          error: updateError,
-        } = await supabase
-          .from("wants")
-          .update({
-            best_price:
-              bestOffer.price,
-          })
-          .eq(
-            "id",
-            existingWant.id
-          );
+        const { error: updateError } =
+          await supabase
+            .from("wants")
+            .update({
+              product: parsed.product,
+              target_price:
+                parsed.targetPrice,
+              best_price:
+                bestOffer.price,
+              best_offer_title:
+                bestOffer.title,
+              best_offer_store:
+                bestOffer.store,
+              best_offer_url:
+                bestOffer.url,
+              updated_at:
+                new Date().toISOString(),
+            })
+            .eq("id", existingWant.id);
 
         if (updateError) {
           throw updateError;
         }
 
         setActivated(true);
-
         setMessageType("info");
 
         setMessage(
-          `This WANT is already active. Best price updated to €${bestOffer.price.toFixed(
+          `This WANT is already active. Best offer updated: €${bestOffer.price.toFixed(
             2
-          )}.`
+          )} at ${bestOffer.store}.`
         );
 
         return;
       }
 
-      const {
-        error: insertError,
-      } = await supabase
-        .from("wants")
-        .insert({
-          user_id: user.id,
+      const { error: insertError } =
+        await supabase
+          .from("wants")
+          .insert({
+            user_id: user.id,
+            original_query: query,
+            product: parsed.product,
+            target_price:
+              parsed.targetPrice,
+            currency:
+              parsed.currency,
+            condition:
+              parsed.condition,
+            status: "active",
 
-          original_query:
-            query,
+            best_price:
+              bestOffer.price,
 
-          product:
-            parsed.product,
+            best_offer_title:
+              bestOffer.title,
 
-          target_price:
-            parsed.targetPrice,
+            best_offer_store:
+              bestOffer.store,
 
-          currency:
-            parsed.currency,
+            best_offer_url:
+              bestOffer.url,
 
-          condition:
-            parsed.condition,
-
-          status:
-            "active",
-
-          best_price:
-            bestOffer.price,
-        });
+            updated_at:
+              new Date().toISOString(),
+          });
 
       if (insertError) {
         throw insertError;
       }
 
       setActivated(true);
-
-      setMessageType(
-        "success"
-      );
+      setMessageType("success");
 
       setMessage(
-        `WANT activated successfully. Best price: €${bestOffer.price.toFixed(
+        `WANT activated. Best offer: €${bestOffer.price.toFixed(
           2
-        )}.`
+        )} at ${bestOffer.store}.`
       );
     } catch (error) {
       console.error(
@@ -349,25 +321,21 @@ function SearchContent() {
 
           <div className="flex items-center gap-3">
 
-            {!loadingUser &&
-              user && (
-                <a
-                  href="/dashboard"
-                  className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/60 transition hover:bg-white/10 hover:text-white"
-                >
-                  My Wants
-                </a>
-              )}
+            {!loadingUser && user && (
+              <a
+                href="/dashboard"
+                className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/60 transition hover:bg-white/10 hover:text-white"
+              >
+                My Wants
+              </a>
+            )}
 
-            {!loadingUser &&
-            user ? (
+            {!loadingUser && user ? (
               <div className="text-right">
                 <div className="text-sm font-medium">
-                  {user
-                    .user_metadata
+                  {user.user_metadata
                     ?.full_name ||
-                    user
-                      .user_metadata
+                    user.user_metadata
                       ?.name ||
                     user.email}
                 </div>
@@ -384,10 +352,12 @@ function SearchContent() {
                 Sign in
               </a>
             )}
+
           </div>
         </header>
 
         <section className="mt-16">
+
           <div className="text-xs uppercase tracking-[0.18em] text-white/30">
             WANT understood
           </div>
@@ -397,10 +367,9 @@ function SearchContent() {
           </h1>
 
           <p className="mt-4 text-lg text-white/40">
-            We turned your request
-            into a live buying
-            target.
+            We turned your request into a live buying target.
           </p>
+
         </section>
 
         <section className="mt-10 grid gap-4 md:grid-cols-4">
@@ -421,8 +390,7 @@ function SearchContent() {
             </div>
 
             <div className="mt-4 text-2xl font-semibold">
-              {parsed.targetPrice !==
-              null
+              {parsed.targetPrice !== null
                 ? `€${parsed.targetPrice}`
                 : "Not specified"}
             </div>
@@ -473,6 +441,7 @@ function SearchContent() {
               </div>
 
               <div className="mt-2 text-4xl font-semibold">
+
                 {loadingOffers
                   ? "Searching..."
                   : bestOffer
@@ -480,20 +449,30 @@ function SearchContent() {
                       2
                     )}`
                   : "No offers found"}
+
               </div>
 
               <div className="mt-2 max-w-3xl text-sm text-white/30">
+
                 {bestOffer
                   ? `${bestOffer.store} · ${bestOffer.title}`
                   : "WANT will compare available offers."}
+
               </div>
+
+              {bestOffer &&
+                parsed.targetPrice !== null &&
+                bestOffer.price <=
+                  parsed.targetPrice && (
+                  <div className="mt-3 inline-flex rounded-full bg-green-400/10 px-3 py-1 text-xs font-medium text-green-400">
+                    Target reached
+                  </div>
+                )}
 
             </div>
 
             <button
-              onClick={
-                activateWant
-              }
+              onClick={activateWant}
               disabled={
                 activating ||
                 activated ||
@@ -514,11 +493,9 @@ function SearchContent() {
           {message && (
             <div
               className={`mt-5 text-sm ${
-                messageType ===
-                "success"
+                messageType === "success"
                   ? "text-green-400"
-                  : messageType ===
-                    "error"
+                  : messageType === "error"
                   ? "text-red-400"
                   : "text-white/50"
               }`}
@@ -561,106 +538,93 @@ function SearchContent() {
 
           <div className="grid gap-4">
 
-            {offers.map(
-              (offer) => {
+            {offers.map((offer) => {
 
-                const underTarget =
-                  parsed.targetPrice !==
-                    null &&
-                  offer.price <=
-                    parsed.targetPrice;
+              const underTarget =
+                parsed.targetPrice !==
+                  null &&
+                offer.price <=
+                  parsed.targetPrice;
 
-                return (
-                  <div
-                    key={offer.id}
-                    className="flex flex-col gap-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 sm:flex-row sm:items-center sm:justify-between"
-                  >
+              return (
+                <div
+                  key={offer.id}
+                  className="flex flex-col gap-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 sm:flex-row sm:items-center sm:justify-between"
+                >
 
-                    <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex min-w-0 items-center gap-4">
 
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06] text-xs text-white/30">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06] text-xs text-white/30">
 
-                        {offer.image ? (
-                          <img
-                            src={
-                              offer.image
-                            }
-                            alt={
-                              offer.title
-                            }
-                            className="h-full w-full object-contain"
-                          />
-                        ) : (
-                          "IMG"
-                        )}
+                      {offer.image ? (
+                        <img
+                          src={offer.image}
+                          alt={offer.title}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        "IMG"
+                      )}
 
-                      </div>
-
-                      <div className="min-w-0">
-
-                        <div className="font-medium">
-                          {offer.title}
-                        </div>
-
-                        <div className="mt-1 text-sm text-white/35">
-                          {offer.store}
-                        </div>
-
-                      </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-4">
+                    <div className="min-w-0">
 
-                      <div className="text-right">
-
-                        <div className="text-xl font-semibold">
-                          €
-                          {offer.price.toFixed(
-                            2
-                          )}
-                        </div>
-
-                        <div
-                          className={`mt-1 text-xs ${
-                            underTarget
-                              ? "text-green-400"
-                              : "text-white/30"
-                          }`}
-                        >
-
-                          {underTarget
-                            ? "Target reached"
-                            : parsed.targetPrice !==
-                              null
-                            ? `€${(
-                                offer.price -
-                                parsed.targetPrice
-                              ).toFixed(
-                                2
-                              )} above target`
-                            : "No target price"}
-
-                        </div>
-
+                      <div className="font-medium">
+                        {offer.title}
                       </div>
 
-                      <a
-                        href={
-                          offer.url
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
-                      >
-                        View
-                      </a>
+                      <div className="mt-1 text-sm text-white/35">
+                        {offer.store}
+                      </div>
 
                     </div>
 
                   </div>
-                );
-              }
-            )}
+
+                  <div className="flex shrink-0 items-center gap-4">
+
+                    <div className="text-right">
+
+                      <div className="text-xl font-semibold">
+                        €{offer.price.toFixed(2)}
+                      </div>
+
+                      <div
+                        className={`mt-1 text-xs ${
+                          underTarget
+                            ? "text-green-400"
+                            : "text-white/30"
+                        }`}
+                      >
+                        {underTarget
+                          ? "Target reached"
+                          : parsed.targetPrice !== null
+                          ? `€${(
+                              offer.price -
+                              parsed.targetPrice
+                            ).toFixed(
+                              2
+                            )} above target`
+                          : "No target price"}
+                      </div>
+
+                    </div>
+
+                    <a
+                      href={offer.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+                    >
+                      View
+                    </a>
+
+                  </div>
+
+                </div>
+              );
+            })}
 
           </div>
 
