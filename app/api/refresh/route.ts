@@ -3,8 +3,14 @@ import {
   NextResponse,
 } from "next/server";
 
+import { Resend } from "resend";
+
 import { supabaseServer } from "@/lib/supabase-server";
 import { searchAllProviders } from "@/lib/providers";
+
+const resend = new Resend(
+  process.env.RESEND_API_KEY
+);
 
 function isAuthorized(
   request: NextRequest
@@ -20,6 +26,147 @@ function isAuthorized(
   );
 }
 
+async function sendTargetEmail({
+  email,
+  product,
+  price,
+  targetPrice,
+  store,
+  url,
+}: {
+  email: string;
+  product: string;
+  price: number;
+  targetPrice: number;
+  store: string;
+  url: string;
+}) {
+  const { error } =
+    await resend.emails.send({
+      from: "WANT <onboarding@resend.dev>",
+
+      to: email,
+
+      subject: `🔥 ${product} reached your target`,
+
+      html: `
+        <div style="
+          background:#050505;
+          color:#ffffff;
+          font-family:Arial,Helvetica,sans-serif;
+          padding:40px;
+        ">
+          <div style="
+            max-width:600px;
+            margin:auto;
+          ">
+            <div style="
+              font-size:22px;
+              font-weight:700;
+              margin-bottom:40px;
+            ">
+              WANT
+            </div>
+
+            <div style="
+              color:#9ca3af;
+              font-size:12px;
+              text-transform:uppercase;
+              letter-spacing:2px;
+              margin-bottom:12px;
+            ">
+              Target reached
+            </div>
+
+            <h1 style="
+              font-size:34px;
+              margin:0 0 16px 0;
+            ">
+              ${product}
+            </h1>
+
+            <p style="
+              color:#9ca3af;
+              font-size:16px;
+              line-height:1.6;
+            ">
+              WANT found an offer at or below the price you were waiting for.
+            </p>
+
+            <div style="
+              margin-top:32px;
+              padding:24px;
+              border:1px solid #262626;
+              border-radius:18px;
+            ">
+              <div style="
+                color:#737373;
+                font-size:13px;
+              ">
+                Best price
+              </div>
+
+              <div style="
+                font-size:36px;
+                font-weight:700;
+                margin-top:6px;
+              ">
+                €${price.toFixed(2)}
+              </div>
+
+              <div style="
+                color:#737373;
+                margin-top:8px;
+                font-size:14px;
+              ">
+                Your target: €${targetPrice.toFixed(2)}
+              </div>
+
+              <div style="
+                color:#737373;
+                margin-top:4px;
+                font-size:14px;
+              ">
+                Store: ${store}
+              </div>
+            </div>
+
+            <a
+              href="${url}"
+              style="
+                display:inline-block;
+                background:#ffffff;
+                color:#000000;
+                text-decoration:none;
+                font-weight:700;
+                padding:14px 22px;
+                border-radius:999px;
+                margin-top:28px;
+              "
+            >
+              View deal →
+            </a>
+
+            <p style="
+              color:#525252;
+              font-size:12px;
+              margin-top:40px;
+            ">
+              WANT — The internet searches. You decide.
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+  if (error) {
+    throw new Error(
+      error.message ||
+        "Could not send email."
+    );
+  }
+}
+
 async function runRefresh() {
   try {
     const {
@@ -27,15 +174,16 @@ async function runRefresh() {
       error,
     } = await supabaseServer
       .from("wants")
-      .select(
-        `
+      .select(`
         id,
+        user_id,
         product,
         target_price,
         best_price,
-        status
-        `
-      )
+        status,
+        last_notified_price,
+        last_notified_at
+      `)
       .eq(
         "status",
         "active"
@@ -60,13 +208,13 @@ async function runRefresh() {
       return NextResponse.json({
         checked: 0,
         updated: 0,
-        reachedTargets: 0,
+        notified: 0,
         results: [],
       });
     }
 
     let updated = 0;
-    let reachedTargets = 0;
+    let notified = 0;
 
     const results = [];
 
@@ -94,13 +242,18 @@ async function runRefresh() {
         const bestOffer =
           offers[0];
 
-        const reachedTarget =
+        const targetPrice =
           want.target_price !==
-            null &&
+          null
+            ? Number(
+                want.target_price
+              )
+            : null;
+
+        const reachedTarget =
+          targetPrice !== null &&
           bestOffer.price <=
-            Number(
-              want.target_price
-            );
+            targetPrice;
 
         const {
           error:
@@ -145,8 +298,86 @@ async function runRefresh() {
 
         updated++;
 
-        if (reachedTarget) {
-          reachedTargets++;
+        let emailSent = false;
+
+        const lastNotifiedPrice =
+          want.last_notified_price !==
+          null
+            ? Number(
+                want.last_notified_price
+              )
+            : null;
+
+        const shouldNotify =
+          reachedTarget &&
+          (
+            lastNotifiedPrice ===
+              null ||
+            bestOffer.price <
+              lastNotifiedPrice
+          );
+
+        if (shouldNotify) {
+          const {
+            data: userData,
+            error: userError,
+          } =
+            await supabaseServer
+              .auth
+              .admin
+              .getUserById(
+                want.user_id
+              );
+
+          if (
+            !userError &&
+            userData.user?.email
+          ) {
+            await sendTargetEmail({
+              email:
+                userData.user.email,
+
+              product:
+                want.product,
+
+              price:
+                bestOffer.price,
+
+              targetPrice:
+                targetPrice!,
+
+              store:
+                bestOffer.store,
+
+              url:
+                bestOffer.url,
+            });
+
+            const {
+              error:
+                notificationUpdateError,
+            } =
+              await supabaseServer
+                .from("wants")
+                .update({
+                  last_notified_price:
+                    bestOffer.price,
+
+                  last_notified_at:
+                    new Date().toISOString(),
+                })
+                .eq(
+                  "id",
+                  want.id
+                );
+
+            if (
+              !notificationUpdateError
+            ) {
+              notified++;
+              emailSent = true;
+            }
+          }
         }
 
         results.push({
@@ -161,19 +392,14 @@ async function runRefresh() {
           bestPrice:
             bestOffer.price,
 
-          targetPrice:
-            want.target_price,
+          targetPrice,
 
           reachedTarget,
 
-          title:
-            bestOffer.title,
+          emailSent,
 
           store:
             bestOffer.store,
-
-          url:
-            bestOffer.url,
         });
       } catch (error) {
         results.push({
@@ -199,7 +425,7 @@ async function runRefresh() {
 
       updated,
 
-      reachedTargets,
+      notified,
 
       results,
     });
@@ -221,7 +447,9 @@ async function runRefresh() {
 export async function GET(
   request: NextRequest
 ) {
-  if (!isAuthorized(request)) {
+  if (
+    !isAuthorized(request)
+  ) {
     return NextResponse.json(
       {
         error:
@@ -239,7 +467,9 @@ export async function GET(
 export async function POST(
   request: NextRequest
 ) {
-  if (!isAuthorized(request)) {
+  if (
+    !isAuthorized(request)
+  ) {
     return NextResponse.json(
       {
         error:
