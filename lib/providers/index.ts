@@ -1,8 +1,8 @@
-import { demoProvider } from "./demo";
+import { serpApiProvider } from "./serpapi";
 import type { Offer, SearchProvider } from "./types";
 
 const providers: SearchProvider[] = [
-  demoProvider,
+  serpApiProvider,
 ];
 
 export async function searchAllProviders(
