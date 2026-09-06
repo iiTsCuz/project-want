@@ -192,8 +192,7 @@ async function runRefresh() {
     if (error) {
       return NextResponse.json(
         {
-          error:
-            error.message,
+          error: error.message,
         },
         {
           status: 500,
@@ -230,10 +229,8 @@ async function runRefresh() {
         ) {
           results.push({
             id: want.id,
-            product:
-              want.product,
-            status:
-              "no_offers",
+            product: want.product,
+            status: "no_offers",
           });
 
           continue;
@@ -299,6 +296,33 @@ async function runRefresh() {
         updated++;
 
         let emailSent = false;
+        let notificationsEnabled = false;
+
+        const {
+          data: profile,
+          error: profileError,
+        } =
+          await supabaseServer
+            .from("profiles")
+            .select(
+              "email_notifications"
+            )
+            .eq(
+              "id",
+              want.user_id
+            )
+            .maybeSingle();
+
+        if (profileError) {
+          console.error(
+            `PROFILE SETTINGS ERROR for ${want.user_id}:`,
+            profileError
+          );
+        }
+
+        notificationsEnabled =
+          profile?.email_notifications ===
+          true;
 
         const lastNotifiedPrice =
           want.last_notified_price !==
@@ -309,6 +333,7 @@ async function runRefresh() {
             : null;
 
         const shouldNotify =
+          notificationsEnabled &&
           reachedTarget &&
           (
             lastNotifiedPrice ===
@@ -328,6 +353,13 @@ async function runRefresh() {
               .getUserById(
                 want.user_id
               );
+
+          if (userError) {
+            console.error(
+              `USER LOOKUP ERROR for ${want.user_id}:`,
+              userError
+            );
+          }
 
           if (
             !userError &&
@@ -372,8 +404,13 @@ async function runRefresh() {
                 );
 
             if (
-              !notificationUpdateError
+              notificationUpdateError
             ) {
+              console.error(
+                `NOTIFICATION UPDATE ERROR for WANT ${want.id}:`,
+                notificationUpdateError
+              );
+            } else {
               notified++;
               emailSent = true;
             }
@@ -381,7 +418,8 @@ async function runRefresh() {
         }
 
         results.push({
-          id: want.id,
+          id:
+            want.id,
 
           product:
             want.product,
@@ -396,6 +434,8 @@ async function runRefresh() {
 
           reachedTarget,
 
+          notificationsEnabled,
+
           emailSent,
 
           store:
@@ -403,7 +443,8 @@ async function runRefresh() {
         });
       } catch (error) {
         results.push({
-          id: want.id,
+          id:
+            want.id,
 
           product:
             want.product,
