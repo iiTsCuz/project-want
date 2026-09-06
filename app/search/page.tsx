@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
@@ -39,7 +39,7 @@ function parseWant(query: string) {
   };
 }
 
-export default function SearchPage() {
+function SearchContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
 
@@ -104,6 +104,7 @@ export default function SearchPage() {
         }
 
         const data = await response.json();
+
         setOffers(data.offers || []);
       } catch {
         setOffersError("Could not load offers.");
@@ -225,7 +226,9 @@ export default function SearchPage() {
                     user.email}
                 </div>
 
-                <div className="text-xs text-white/35">Signed in</div>
+                <div className="text-xs text-white/35">
+                  Signed in
+                </div>
               </div>
             ) : (
               <a
@@ -258,7 +261,9 @@ export default function SearchPage() {
               Product
             </div>
 
-            <div className="mt-4 text-lg font-medium">{parsed.product}</div>
+            <div className="mt-4 text-lg font-medium">
+              {parsed.product}
+            </div>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
@@ -278,7 +283,9 @@ export default function SearchPage() {
               Condition
             </div>
 
-            <div className="mt-4 text-lg font-medium">New</div>
+            <div className="mt-4 text-lg font-medium">
+              New
+            </div>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
@@ -322,7 +329,12 @@ export default function SearchPage() {
 
             <button
               onClick={activateWant}
-              disabled={activating || activated || loadingOffers || !bestOffer}
+              disabled={
+                activating ||
+                activated ||
+                loadingOffers ||
+                !bestOffer
+              }
               className="rounded-full bg-white px-7 py-3.5 text-sm font-semibold text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {activating
@@ -350,10 +362,14 @@ export default function SearchPage() {
 
         <section className="mt-8">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Offers</h2>
+            <h2 className="text-xl font-semibold">
+              Offers
+            </h2>
 
             <span className="text-sm text-white/30">
-              {loadingOffers ? "Searching..." : `${offers.length} found`}
+              {loadingOffers
+                ? "Searching..."
+                : `${offers.length} found`}
             </span>
           </div>
 
@@ -388,7 +404,10 @@ export default function SearchPage() {
                     </div>
 
                     <div>
-                      <div className="font-medium">{offer.title}</div>
+                      <div className="font-medium">
+                        {offer.title}
+                      </div>
+
                       <div className="mt-1 text-sm text-white/35">
                         {offer.store}
                       </div>
@@ -434,5 +453,23 @@ export default function SearchPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#050505] text-white">
+          <div className="mx-auto max-w-6xl px-6 py-10 md:px-10">
+            <div className="text-sm text-white/40">
+              Loading WANT...
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <SearchContent />
+    </Suspense>
   );
 }
