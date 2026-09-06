@@ -12,49 +12,23 @@ import { supabase } from "@/lib/supabase";
 
 type Want = {
   id: string;
-
   original_query: string;
-
   product: string;
-
-  target_price:
-    | number
-    | null;
-
+  target_price: number | null;
   currency: string;
-
   condition: string;
-
   status: string;
-
-  best_price:
-    | number
-    | null;
-
-  best_offer_title:
-    | string
-    | null;
-
-  best_offer_store:
-    | string
-    | null;
-
-  best_offer_url:
-    | string
-    | null;
-
+  best_price: number | null;
+  best_offer_title: string | null;
+  best_offer_store: string | null;
+  best_offer_url: string | null;
   created_at: string;
-
-  updated_at:
-    | string
-    | null;
+  updated_at: string | null;
 };
 
 export default function DashboardPage() {
   const [user, setUser] =
-    useState<User | null>(
-      null
-    );
+    useState<User | null>(null);
 
   const [wants, setWants] =
     useState<Want[]>([]);
@@ -65,6 +39,18 @@ export default function DashboardPage() {
   const [message, setMessage] =
     useState("");
 
+  const [messageType, setMessageType] =
+    useState<
+      "success" | "error" | "info"
+    >("info");
+
+  const [
+    actionLoadingId,
+    setActionLoadingId,
+  ] = useState<string | null>(
+    null
+  );
+
   useEffect(() => {
     async function loadDashboard() {
       const {
@@ -73,8 +59,7 @@ export default function DashboardPage() {
         await supabase.auth.getSession();
 
       const currentUser =
-        session?.user ??
-        null;
+        session?.user ?? null;
 
       setUser(currentUser);
 
@@ -88,8 +73,7 @@ export default function DashboardPage() {
         error,
       } = await supabase
         .from("wants")
-        .select(
-          `
+        .select(`
           id,
           original_query,
           product,
@@ -103,8 +87,7 @@ export default function DashboardPage() {
           best_offer_url,
           created_at,
           updated_at
-          `
-        )
+        `)
         .eq(
           "user_id",
           currentUser.id
@@ -120,6 +103,14 @@ export default function DashboardPage() {
         console.error(
           "DASHBOARD ERROR:",
           error
+        );
+
+        setMessageType(
+          "error"
+        );
+
+        setMessage(
+          "Could not load your WANTs."
         );
       }
 
@@ -138,9 +129,21 @@ export default function DashboardPage() {
     loadDashboard();
   }, []);
 
+  function showMessage(
+    type:
+      | "success"
+      | "error"
+      | "info",
+    text: string
+  ) {
+    setMessageType(type);
+    setMessage(text);
+  }
+
   async function pauseWant(
     id: string
   ) {
+    setActionLoadingId(id);
     setMessage("");
 
     const { error } =
@@ -149,16 +152,22 @@ export default function DashboardPage() {
         .update({
           status:
             "inactive",
+
           updated_at:
             new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq(
+          "id",
+          id
+        );
 
     if (error) {
-      setMessage(
+      showMessage(
+        "error",
         "Could not pause this WANT."
       );
 
+      setActionLoadingId(null);
       return;
     }
 
@@ -176,14 +185,18 @@ export default function DashboardPage() {
         )
     );
 
-    setMessage(
+    showMessage(
+      "success",
       "WANT paused."
     );
+
+    setActionLoadingId(null);
   }
 
   async function reactivateWant(
     id: string
   ) {
+    setActionLoadingId(id);
     setMessage("");
 
     const { error } =
@@ -192,16 +205,22 @@ export default function DashboardPage() {
         .update({
           status:
             "active",
+
           updated_at:
             new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq(
+          "id",
+          id
+        );
 
     if (error) {
-      setMessage(
+      showMessage(
+        "error",
         "Could not reactivate this WANT."
       );
 
+      setActionLoadingId(null);
       return;
     }
 
@@ -219,9 +238,71 @@ export default function DashboardPage() {
         )
     );
 
-    setMessage(
+    showMessage(
+      "success",
       "WANT reactivated."
     );
+
+    setActionLoadingId(null);
+  }
+
+  async function deleteWant(
+    want: Want
+  ) {
+    const confirmed =
+      window.confirm(
+        `Delete "${want.product}"?\n\nThis will permanently remove this WANT and stop all future price checks.`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActionLoadingId(
+      want.id
+    );
+
+    setMessage("");
+
+    const { error } =
+      await supabase
+        .from("wants")
+        .delete()
+        .eq(
+          "id",
+          want.id
+        );
+
+    if (error) {
+      console.error(
+        "DELETE WANT ERROR:",
+        error
+      );
+
+      showMessage(
+        "error",
+        "Could not delete this WANT."
+      );
+
+      setActionLoadingId(null);
+      return;
+    }
+
+    setWants(
+      (current) =>
+        current.filter(
+          (item) =>
+            item.id !==
+            want.id
+        )
+    );
+
+    showMessage(
+      "success",
+      `${want.product} deleted.`
+    );
+
+    setActionLoadingId(null);
   }
 
   const activeCount =
@@ -257,15 +338,11 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-[#050505] text-white">
-
-        <div className="mx-auto max-w-6xl px-6 py-10">
-
-          <div className="text-white/40">
+        <div className="mx-auto max-w-6xl px-6 py-10 md:px-10">
+          <div className="text-sm text-white/40">
             Loading your WANTs...
           </div>
-
         </div>
-
       </main>
     );
   }
@@ -273,8 +350,7 @@ export default function DashboardPage() {
   if (!user) {
     return (
       <main className="min-h-screen bg-[#050505] text-white">
-
-        <div className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mx-auto max-w-6xl px-6 py-10 md:px-10">
 
           <a
             href="/"
@@ -285,25 +361,28 @@ export default function DashboardPage() {
 
           <div className="mt-20 max-w-xl">
 
-            <h1 className="text-4xl font-semibold">
+            <div className="text-xs uppercase tracking-[0.18em] text-white/30">
+              My WANTs
+            </div>
+
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">
               Sign in to see your WANTs.
             </h1>
 
-            <p className="mt-4 text-white/40">
+            <p className="mt-5 text-lg text-white/40">
               Your active buying targets will appear here.
             </p>
 
             <a
               href="/"
-              className="mt-8 inline-block rounded-full bg-white px-6 py-3 text-sm font-semibold text-black"
+              className="mt-8 inline-block rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:scale-[1.02]"
             >
-              Go home
+              Go home →
             </a>
 
           </div>
 
         </div>
-
       </main>
     );
   }
@@ -369,7 +448,7 @@ export default function DashboardPage() {
           </h1>
 
           <p className="mt-4 max-w-2xl text-lg text-white/40">
-            WANT tracks your buying targets and keeps the best deal ready for you.
+            WANT tracks your buying targets, updates prices automatically and keeps the best deal ready for you.
           </p>
 
         </section>
@@ -415,14 +494,25 @@ export default function DashboardPage() {
         </section>
 
         {message && (
-          <div className="mt-6 text-sm text-white/50">
+          <div
+            className={`mt-6 rounded-2xl border px-5 py-4 text-sm ${
+              messageType ===
+              "success"
+                ? "border-green-500/15 bg-green-500/5 text-green-400"
+                : messageType ===
+                  "error"
+                ? "border-red-500/15 bg-red-500/5 text-red-400"
+                : "border-white/10 bg-white/[0.02] text-white/50"
+            }`}
+          >
             {message}
           </div>
         )}
 
         <section className="mt-8">
 
-          {wants.length === 0 && (
+          {wants.length ===
+            0 && (
             <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-10 text-center">
 
               <div className="text-xl font-medium">
@@ -435,7 +525,7 @@ export default function DashboardPage() {
 
               <a
                 href="/"
-                className="mt-6 inline-block rounded-full bg-white px-6 py-3 text-sm font-semibold text-black"
+                className="mt-6 inline-block rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:scale-[1.02]"
               >
                 Find something →
               </a>
@@ -465,9 +555,15 @@ export default function DashboardPage() {
                     want.original_query
                   )}`;
 
+                const busy =
+                  actionLoadingId ===
+                  want.id;
+
                 return (
                   <article
-                    key={want.id}
+                    key={
+                      want.id
+                    }
                     className="rounded-[28px] border border-white/[0.08] bg-white/[0.025] p-6 md:p-7"
                   >
 
@@ -483,7 +579,9 @@ export default function DashboardPage() {
                             }
                             className="text-xl font-semibold transition hover:text-white/70"
                           >
-                            {want.product}
+                            {
+                              want.product
+                            }
                           </a>
 
                           <span
@@ -494,7 +592,9 @@ export default function DashboardPage() {
                                 : "bg-white/5 text-white/35"
                             }`}
                           >
-                            {want.status}
+                            {
+                              want.status
+                            }
                           </span>
 
                           {reached && (
@@ -514,6 +614,7 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="mt-1 font-medium">
+
                               {want.target_price !==
                               null
                                 ? `€${Number(
@@ -522,6 +623,7 @@ export default function DashboardPage() {
                                     2
                                   )}`
                                 : "None"}
+
                             </div>
 
                           </div>
@@ -539,6 +641,7 @@ export default function DashboardPage() {
                                   : ""
                               }`}
                             >
+
                               {want.best_price !==
                               null
                                 ? `€${Number(
@@ -547,6 +650,7 @@ export default function DashboardPage() {
                                     2
                                   )}`
                                 : "Searching..."}
+
                             </div>
 
                           </div>
@@ -558,7 +662,24 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="mt-1 font-medium capitalize">
-                              {want.condition}
+                              {
+                                want.condition
+                              }
+                            </div>
+
+                          </div>
+
+                          <div>
+
+                            <div className="text-white/30">
+                              Monitoring
+                            </div>
+
+                            <div className="mt-1 font-medium">
+                              {want.status ===
+                              "active"
+                                ? "On"
+                                : "Paused"}
                             </div>
 
                           </div>
@@ -573,12 +694,16 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="mt-3 text-base font-medium">
-                              {want.best_offer_title}
+                              {
+                                want.best_offer_title
+                              }
                             </div>
 
                             {want.best_offer_store && (
                               <div className="mt-1 text-sm text-white/35">
-                                {want.best_offer_store}
+                                {
+                                  want.best_offer_store
+                                }
                               </div>
                             )}
 
@@ -613,7 +738,7 @@ export default function DashboardPage() {
 
                       </div>
 
-                      <div className="flex shrink-0 gap-3">
+                      <div className="flex shrink-0 flex-wrap gap-3">
 
                         {!want.best_offer_title && (
                           <a
@@ -634,9 +759,14 @@ export default function DashboardPage() {
                                 want.id
                               )
                             }
-                            className="rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/50 transition hover:bg-white/10 hover:text-white"
+                            disabled={
+                              busy
+                            }
+                            className="rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/50 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                           >
-                            Pause
+                            {busy
+                              ? "..."
+                              : "Pause"}
                           </button>
                         ) : (
                           <button
@@ -645,11 +775,32 @@ export default function DashboardPage() {
                                 want.id
                               )
                             }
-                            className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black"
+                            disabled={
+                              busy
+                            }
+                            className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
                           >
-                            Reactivate
+                            {busy
+                              ? "..."
+                              : "Reactivate"}
                           </button>
                         )}
+
+                        <button
+                          onClick={() =>
+                            deleteWant(
+                              want
+                            )
+                          }
+                          disabled={
+                            busy
+                          }
+                          className="rounded-full border border-red-500/15 px-5 py-2.5 text-sm text-red-400/70 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {busy
+                            ? "..."
+                            : "Delete"}
+                        </button>
 
                       </div>
 
