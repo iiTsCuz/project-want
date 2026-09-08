@@ -1,30 +1,58 @@
-import { NextRequest, NextResponse } from "next/server";
-import { searchAllProviders } from "@/lib/providers";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+import {
+  searchAllProviders,
+} from "@/lib/providers";
 
-  const q = searchParams.get("q")?.trim();
+export async function GET(
+  request: NextRequest
+) {
+  const { searchParams } =
+    new URL(request.url);
+
+  const q =
+    searchParams
+      .get("q")
+      ?.trim();
 
   if (!q) {
     return NextResponse.json(
-      { error: "Missing search query." },
-      { status: 400 }
+      {
+        error:
+          "Missing search query.",
+      },
+      {
+        status: 400,
+      }
     );
   }
 
   try {
-    const offers = await searchAllProviders(q);
+    const offers =
+      await searchAllProviders(q);
 
     return NextResponse.json({
       query: q,
       count: offers.length,
       offers,
     });
-  } catch {
+  } catch (error) {
+    console.error(
+      "SEARCH ERROR:",
+      error
+    );
+
     return NextResponse.json(
-      { error: "Search failed." },
-      { status: 500 }
+      {
+        error:
+          "Search failed.",
+      },
+      {
+        status: 500,
+      }
     );
   }
 }

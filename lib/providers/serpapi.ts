@@ -1,4 +1,7 @@
-import type { Offer, SearchProvider } from "./types";
+import type {
+  Offer,
+  SearchProvider,
+} from "./types";
 
 type SerpApiShoppingResult = {
   position?: number;
@@ -11,6 +14,7 @@ type SerpApiShoppingResult = {
   extracted_price?: number;
   thumbnail?: string;
   serpapi_thumbnail?: string;
+  immersive_product_page_token?: string;
 };
 
 type SerpApiResponse = {
@@ -18,10 +22,64 @@ type SerpApiResponse = {
   error?: string;
 };
 
-function looksLikeInstallment(priceText?: string) {
-  if (!priceText) return false;
+/*
+ * WANT TRUSTED STORES
+ *
+ * Mostriamo SOLO merchant che abbiamo deciso
+ * esplicitamente di considerare affidabili.
+ *
+ * Nota:
+ * Amazon ed eBay possono includere venditori marketplace,
+ * quindi non li etichettiamo ancora come "verified seller".
+ */
+const TRUSTED_STORES = [
+  "amazon",
+  "ebay",
+  "unieuro",
+  "mediaworld",
+  "euronics",
+];
 
-  const text = priceText.toLowerCase();
+function normalizeStoreName(
+  value?: string
+) {
+  return (value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function isTrustedStore(
+  store?: string
+) {
+  const normalized =
+    normalizeStoreName(
+      store
+    );
+
+  if (!normalized) {
+    return false;
+  }
+
+  return TRUSTED_STORES.some(
+    (
+      trustedStore
+    ) =>
+      normalized.includes(
+        trustedStore
+      )
+  );
+}
+
+function looksLikeInstallment(
+  priceText?: string
+) {
+  if (!priceText) {
+    return false;
+  }
+
+  const text =
+    priceText.toLowerCase();
 
   const installmentWords = [
     "/mese",
@@ -35,134 +93,284 @@ function looksLikeInstallment(priceText?: string) {
     "rata da",
   ];
 
-  return installmentWords.some((word) => text.includes(word));
+  return installmentWords.some(
+    (
+      word
+    ) =>
+      text.includes(
+        word
+      )
+  );
 }
 
-function median(values: number[]) {
-  const sorted = [...values].sort((a, b) => a - b);
+function median(
+  values: number[]
+) {
+  const sorted = [
+    ...values,
+  ].sort(
+    (
+      a,
+      b
+    ) =>
+      a - b
+  );
 
-  const middle = Math.floor(sorted.length / 2);
+  const middle =
+    Math.floor(
+      sorted.length /
+        2
+    );
 
-  if (sorted.length % 2 === 0) {
-    return (sorted[middle - 1] + sorted[middle]) / 2;
+  if (
+    sorted.length %
+      2 ===
+    0
+  ) {
+    return (
+      sorted[
+        middle - 1
+      ] +
+      sorted[
+        middle
+      ]
+    ) / 2;
   }
 
-  return sorted[middle];
+  return sorted[
+    middle
+  ];
 }
 
-export const serpApiProvider: SearchProvider = {
-  name: "serpapi",
+export const serpApiProvider: SearchProvider =
+  {
+    name: "serpapi",
 
-  async search(query: string): Promise<Offer[]> {
-    const apiKey = process.env.SERPAPI_KEY;
+    async search(
+      query: string
+    ): Promise<Offer[]> {
+      const apiKey =
+        process.env.SERPAPI_KEY;
 
-    if (!apiKey) {
-      throw new Error("SERPAPI_KEY is missing.");
-    }
-
-    const params = new URLSearchParams({
-      engine: "google_shopping",
-      q: query,
-      api_key: apiKey,
-      gl: "it",
-      hl: "it",
-      location: "Italy",
-    });
-
-    const response = await fetch(
-      `https://serpapi.com/search.json?${params.toString()}`,
-      {
-        cache: "no-store",
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `SerpApi request failed: ${response.status}`
-      );
-    }
-
-    const data: SerpApiResponse = await response.json();
-
-    if (data.error) {
-      throw new Error(data.error);
-    }
-
-    const results = data.shopping_results ?? [];
-
-    const validResults = results.filter((item) => {
-      const hasValidPrice =
-        typeof item.extracted_price === "number" &&
-        Number.isFinite(item.extracted_price) &&
-        item.extracted_price > 0;
-
-      const hasLink = Boolean(
-        item.product_link || item.link
-      );
-
-      return (
-        Boolean(item.title) &&
-        hasValidPrice &&
-        hasLink &&
-        !looksLikeInstallment(item.price)
-      );
-    });
-
-    const prices = validResults.map(
-      (item) => item.extracted_price as number
-    );
-
-    const medianPrice =
-      prices.length >= 5
-        ? median(prices)
-        : null;
-
-    const cleanedResults = validResults.filter((item) => {
-      if (medianPrice === null) {
-        return true;
+      if (!apiKey) {
+        throw new Error(
+          "SERPAPI_KEY is missing."
+        );
       }
 
-      const price = item.extracted_price as number;
+      const params =
+        new URLSearchParams(
+          {
+            engine:
+              "google_shopping",
 
-      const suspiciouslyLow =
-        price < medianPrice * 0.2;
+            q:
+              query,
 
-      const suspiciouslyHigh =
-        price > medianPrice * 5;
+            api_key:
+              apiKey,
 
-      return !suspiciouslyLow && !suspiciouslyHigh;
-    });
+            gl:
+              "it",
 
-    const offers: Offer[] = cleanedResults.map(
-      (item, index) => ({
-        id:
-          item.product_id ||
-          `serpapi-${item.position ?? index}-${item.title}`,
+            hl:
+              "it",
 
-        title: item.title!,
+            location:
+              "Italy",
+          }
+        );
 
-        price: item.extracted_price!,
+      const response =
+        await fetch(
+          `https://serpapi.com/search.json?${params.toString()}`,
+          {
+            cache:
+              "no-store",
+          }
+        );
 
-        currency: "EUR",
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          `SerpApi request failed: ${response.status}`
+        );
+      }
 
-        store:
-          item.source ||
-          "Google Shopping",
+      const data: SerpApiResponse =
+        await response.json();
 
-        url:
-          item.product_link ||
-          item.link ||
-          "#",
+      if (
+        data.error
+      ) {
+        throw new Error(
+          data.error
+        );
+      }
 
-        image:
-          item.thumbnail ||
-          item.serpapi_thumbnail ||
-          null,
-      })
-    );
+      const results =
+        data.shopping_results ??
+        [];
 
-    return offers.sort(
-      (a, b) => a.price - b.price
-    );
-  },
-};
+      /*
+       * FILTRO BASE
+       *
+       * - titolo valido
+       * - product_id presente
+       * - prezzo numerico positivo
+       * - niente rate
+       * - solo store approvati
+       */
+      const validResults =
+        results.filter(
+          (
+            item
+          ) => {
+            const hasValidPrice =
+              typeof item.extracted_price ===
+                "number" &&
+              Number.isFinite(
+                item.extracted_price
+              ) &&
+              item.extracted_price >
+                0;
+
+            const hasProduct =
+              Boolean(
+                item.title
+              ) &&
+              Boolean(
+                item.product_id
+              );
+
+            const trustedStore =
+              isTrustedStore(
+                item.source
+              );
+
+            const installment =
+              looksLikeInstallment(
+                item.price
+              );
+
+            return (
+              hasProduct &&
+              hasValidPrice &&
+              trustedStore &&
+              !installment
+            );
+          }
+        );
+
+      /*
+       * FILTRO ANTI-OUTLIER
+       *
+       * Se abbiamo abbastanza risultati,
+       * rimuoviamo prezzi enormemente fuori scala.
+       */
+      const prices =
+        validResults.map(
+          (
+            item
+          ) =>
+            item.extracted_price as number
+        );
+
+      const medianPrice =
+        prices.length >= 5
+          ? median(
+              prices
+            )
+          : null;
+
+      const cleanedResults =
+        validResults.filter(
+          (
+            item
+          ) => {
+            if (
+              medianPrice ===
+              null
+            ) {
+              return true;
+            }
+
+            const price =
+              item.extracted_price as number;
+
+            const suspiciouslyLow =
+              price <
+              medianPrice *
+                0.2;
+
+            const suspiciouslyHigh =
+              price >
+              medianPrice *
+                5;
+
+            return (
+              !suspiciouslyLow &&
+              !suspiciouslyHigh
+            );
+          }
+        );
+
+      /*
+       * CONVERSIONE IN OFFER
+       */
+      const offers: Offer[] =
+        cleanedResults.map(
+          (
+            item,
+            index
+          ) => ({
+            id:
+              item.product_id ||
+              `serpapi-${item.position ?? index}-${item.title}`,
+
+            title:
+              item.title!,
+
+            price:
+              item.extracted_price!,
+
+            currency:
+              "EUR",
+
+            store:
+              item.source ||
+              "Unknown store",
+
+            url:
+              item.product_link ||
+              item.link ||
+              "#",
+
+            image:
+              item.thumbnail ||
+              item.serpapi_thumbnail ||
+              null,
+
+            provider:
+              "serpapi",
+
+            resolverToken:
+              item.immersive_product_page_token ||
+              null,
+          })
+        );
+
+      /*
+       * PIÙ ECONOMICO PRIMA
+       */
+      return offers.sort(
+        (
+          a,
+          b
+        ) =>
+          a.price -
+          b.price
+      );
+    },
+  };

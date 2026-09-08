@@ -50,83 +50,105 @@ async function sendTargetEmail({
       subject: `🔥 ${product} reached your target`,
 
       html: `
-        <div style="
-          background:#050505;
-          color:#ffffff;
-          font-family:Arial,Helvetica,sans-serif;
-          padding:40px;
-        ">
-          <div style="
-            max-width:600px;
-            margin:auto;
-          ">
-            <div style="
-              font-size:22px;
-              font-weight:700;
-              margin-bottom:40px;
-            ">
+        <div
+          style="
+            background:#050505;
+            color:#ffffff;
+            font-family:Arial,Helvetica,sans-serif;
+            padding:40px;
+          "
+        >
+          <div
+            style="
+              max-width:600px;
+              margin:auto;
+            "
+          >
+            <div
+              style="
+                font-size:22px;
+                font-weight:700;
+                margin-bottom:40px;
+              "
+            >
               WANT
             </div>
 
-            <div style="
-              color:#9ca3af;
-              font-size:12px;
-              text-transform:uppercase;
-              letter-spacing:2px;
-              margin-bottom:12px;
-            ">
+            <div
+              style="
+                color:#9ca3af;
+                font-size:12px;
+                text-transform:uppercase;
+                letter-spacing:2px;
+                margin-bottom:12px;
+              "
+            >
               Target reached
             </div>
 
-            <h1 style="
-              font-size:34px;
-              margin:0 0 16px 0;
-            ">
+            <h1
+              style="
+                font-size:34px;
+                margin:0 0 16px 0;
+              "
+            >
               ${product}
             </h1>
 
-            <p style="
-              color:#9ca3af;
-              font-size:16px;
-              line-height:1.6;
-            ">
+            <p
+              style="
+                color:#9ca3af;
+                font-size:16px;
+                line-height:1.6;
+              "
+            >
               WANT found an offer at or below the price you were waiting for.
             </p>
 
-            <div style="
-              margin-top:32px;
-              padding:24px;
-              border:1px solid #262626;
-              border-radius:18px;
-            ">
-              <div style="
-                color:#737373;
-                font-size:13px;
-              ">
+            <div
+              style="
+                margin-top:32px;
+                padding:24px;
+                border:1px solid #262626;
+                border-radius:18px;
+              "
+            >
+              <div
+                style="
+                  color:#737373;
+                  font-size:13px;
+                "
+              >
                 Best price
               </div>
 
-              <div style="
-                font-size:36px;
-                font-weight:700;
-                margin-top:6px;
-              ">
+              <div
+                style="
+                  font-size:36px;
+                  font-weight:700;
+                  margin-top:6px;
+                "
+              >
                 €${price.toFixed(2)}
               </div>
 
-              <div style="
-                color:#737373;
-                margin-top:8px;
-                font-size:14px;
-              ">
+              <div
+                style="
+                  color:#737373;
+                  margin-top:8px;
+                  font-size:14px;
+                "
+              >
                 Your target: €${targetPrice.toFixed(2)}
               </div>
 
-              <div style="
-                color:#737373;
-                margin-top:4px;
-                font-size:14px;
-              ">
+              <div
+                style="
+                  color:#737373;
+                  margin-top:4px;
+                  font-size:14px;
+                "
+              >
                 Store: ${store}
               </div>
             </div>
@@ -147,11 +169,13 @@ async function sendTargetEmail({
               View deal →
             </a>
 
-            <p style="
-              color:#525252;
-              font-size:12px;
-              margin-top:40px;
-            ">
+            <p
+              style="
+                color:#525252;
+                font-size:12px;
+                margin-top:40px;
+              "
+            >
               WANT — The internet searches. You decide.
             </p>
           </div>
@@ -192,7 +216,8 @@ async function runRefresh() {
     if (error) {
       return NextResponse.json(
         {
-          error: error.message,
+          error:
+            error.message,
         },
         {
           status: 500,
@@ -208,12 +233,14 @@ async function runRefresh() {
         checked: 0,
         updated: 0,
         notified: 0,
+        historyInserted: 0,
         results: [],
       });
     }
 
     let updated = 0;
     let notified = 0;
+    let historyInserted = 0;
 
     const results = [];
 
@@ -228,9 +255,14 @@ async function runRefresh() {
           offers.length === 0
         ) {
           results.push({
-            id: want.id,
-            product: want.product,
-            status: "no_offers",
+            id:
+              want.id,
+
+            product:
+              want.product,
+
+            status:
+              "no_offers",
           });
 
           continue;
@@ -252,6 +284,9 @@ async function runRefresh() {
           bestOffer.price <=
             targetPrice;
 
+        const checkedAt =
+          new Date().toISOString();
+
         const {
           error:
             updateError,
@@ -271,8 +306,11 @@ async function runRefresh() {
               best_offer_url:
                 bestOffer.url,
 
+              last_checked_at:
+                checkedAt,
+
               updated_at:
-                new Date().toISOString(),
+                checkedAt,
             })
             .eq(
               "id",
@@ -281,11 +319,15 @@ async function runRefresh() {
 
         if (updateError) {
           results.push({
-            id: want.id,
+            id:
+              want.id,
+
             product:
               want.product,
+
             status:
               "update_failed",
+
             error:
               updateError.message,
           });
@@ -294,6 +336,43 @@ async function runRefresh() {
         }
 
         updated++;
+
+        const {
+          error:
+            historyError,
+        } =
+          await supabaseServer
+            .from(
+              "want_price_history"
+            )
+            .insert({
+              want_id:
+                want.id,
+
+              price:
+                bestOffer.price,
+
+              store:
+                bestOffer.store,
+
+              offer_title:
+                bestOffer.title,
+
+              offer_url:
+                bestOffer.url,
+
+              checked_at:
+                checkedAt,
+            });
+
+        if (historyError) {
+          console.error(
+            `PRICE HISTORY ERROR for WANT ${want.id}:`,
+            historyError
+          );
+        } else {
+          historyInserted++;
+        }
 
         let emailSent = false;
         let notificationsEnabled = false;
@@ -440,6 +519,15 @@ async function runRefresh() {
 
           store:
             bestOffer.store,
+
+          title:
+            bestOffer.title,
+
+          lastCheckedAt:
+            checkedAt,
+
+          historySaved:
+            !historyError,
         });
       } catch (error) {
         results.push({
@@ -467,6 +555,8 @@ async function runRefresh() {
       updated,
 
       notified,
+
+      historyInserted,
 
       results,
     });
