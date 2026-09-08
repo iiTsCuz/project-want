@@ -5,7 +5,7 @@ import type {
 export default function sitemap():
   MetadataRoute.Sitemap {
   const baseUrl =
-    "https://project-want.vercel.app";
+    "https://www.wantpilot.app";
 
   const products = [
     "rtx-5070",
