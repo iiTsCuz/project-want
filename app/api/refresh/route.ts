@@ -8,13 +8,20 @@ import { Resend } from "resend";
 import { supabaseServer } from "@/lib/supabase-server";
 import { searchAllProviders } from "@/lib/providers";
 
-const resend = new Resend(
-  process.env.RESEND_API_KEY
-);
-
 function isAuthorized(
   request: NextRequest
 ) {
+  const cronSecret =
+    process.env.CRON_SECRET;
+
+  if (!cronSecret) {
+    console.error(
+      "CRON_SECRET is missing."
+    );
+
+    return false;
+  }
+
   const authHeader =
     request.headers.get(
       "authorization"
@@ -22,7 +29,7 @@ function isAuthorized(
 
   return (
     authHeader ===
-    `Bearer ${process.env.CRON_SECRET}`
+    `Bearer ${cronSecret}`
   );
 }
 
@@ -40,117 +47,127 @@ async function sendTargetEmail({
   targetPrice: number;
   store: string;
   url: string;
-}) {
+}): Promise<boolean> {
+  /*
+   * IMPORTANTE:
+   *
+   * Resend viene inizializzato SOLO quando
+   * dobbiamo realmente inviare un'email.
+   *
+   * In questo modo Vercel può compilare
+   * /api/refresh anche se la variabile non
+   * viene valutata durante la fase di build.
+   */
+  const resendApiKey =
+    process.env.RESEND_API_KEY;
+
+  if (!resendApiKey) {
+    console.error(
+      "RESEND_API_KEY is missing. Email skipped."
+    );
+
+    return false;
+  }
+
+  const resend =
+    new Resend(
+      resendApiKey
+    );
+
   const { error } =
     await resend.emails.send({
-      from: "WANT <onboarding@resend.dev>",
+      from:
+        "WANTPILOT <onboarding@resend.dev>",
 
-      to: email,
+      to:
+        email,
 
-      subject: `🔥 ${product} reached your target`,
+      subject:
+        `🔥 ${product} reached your target`,
 
       html: `
-        <div
-          style="
-            background:#050505;
-            color:#ffffff;
-            font-family:Arial,Helvetica,sans-serif;
-            padding:40px;
-          "
-        >
-          <div
-            style="
-              max-width:600px;
-              margin:auto;
-            "
-          >
-            <div
-              style="
-                font-size:22px;
-                font-weight:700;
-                margin-bottom:40px;
-              "
-            >
-              WANT
+        <div style="
+          background:#050505;
+          color:#ffffff;
+          font-family:Arial,Helvetica,sans-serif;
+          padding:40px;
+        ">
+          <div style="
+            max-width:600px;
+            margin:auto;
+          ">
+
+            <div style="
+              font-size:22px;
+              font-weight:700;
+              margin-bottom:40px;
+            ">
+              WANTPILOT
             </div>
 
-            <div
-              style="
-                color:#9ca3af;
-                font-size:12px;
-                text-transform:uppercase;
-                letter-spacing:2px;
-                margin-bottom:12px;
-              "
-            >
+            <div style="
+              color:#9ca3af;
+              font-size:12px;
+              text-transform:uppercase;
+              letter-spacing:2px;
+              margin-bottom:12px;
+            ">
               Target reached
             </div>
 
-            <h1
-              style="
-                font-size:34px;
-                margin:0 0 16px 0;
-              "
-            >
+            <h1 style="
+              font-size:34px;
+              margin:0 0 16px 0;
+            ">
               ${product}
             </h1>
 
-            <p
-              style="
-                color:#9ca3af;
-                font-size:16px;
-                line-height:1.6;
-              "
-            >
-              WANT found an offer at or below the price you were waiting for.
+            <p style="
+              color:#9ca3af;
+              font-size:16px;
+              line-height:1.6;
+            ">
+              WANTPILOT found an offer at or below the price you were waiting for.
             </p>
 
-            <div
-              style="
-                margin-top:32px;
-                padding:24px;
-                border:1px solid #262626;
-                border-radius:18px;
-              "
-            >
-              <div
-                style="
-                  color:#737373;
-                  font-size:13px;
-                "
-              >
+            <div style="
+              margin-top:32px;
+              padding:24px;
+              border:1px solid #262626;
+              border-radius:18px;
+            ">
+
+              <div style="
+                color:#737373;
+                font-size:13px;
+              ">
                 Best price
               </div>
 
-              <div
-                style="
-                  font-size:36px;
-                  font-weight:700;
-                  margin-top:6px;
-                "
-              >
+              <div style="
+                font-size:36px;
+                font-weight:700;
+                margin-top:6px;
+              ">
                 €${price.toFixed(2)}
               </div>
 
-              <div
-                style="
-                  color:#737373;
-                  margin-top:8px;
-                  font-size:14px;
-                "
-              >
+              <div style="
+                color:#737373;
+                margin-top:8px;
+                font-size:14px;
+              ">
                 Your target: €${targetPrice.toFixed(2)}
               </div>
 
-              <div
-                style="
-                  color:#737373;
-                  margin-top:4px;
-                  font-size:14px;
-                "
-              >
+              <div style="
+                color:#737373;
+                margin-top:4px;
+                font-size:14px;
+              ">
                 Store: ${store}
               </div>
+
             </div>
 
             <a
@@ -169,26 +186,29 @@ async function sendTargetEmail({
               View deal →
             </a>
 
-            <p
-              style="
-                color:#525252;
-                font-size:12px;
-                margin-top:40px;
-              "
-            >
-              WANT — The internet searches. You decide.
+            <p style="
+              color:#525252;
+              font-size:12px;
+              margin-top:40px;
+            ">
+              WANTPILOT — Stop checking prices. We watch them for you.
             </p>
+
           </div>
         </div>
       `,
     });
 
   if (error) {
-    throw new Error(
-      error.message ||
-        "Could not send email."
+    console.error(
+      "RESEND EMAIL ERROR:",
+      error
     );
+
+    return false;
   }
+
+  return true;
 }
 
 async function runRefresh() {
@@ -246,13 +266,17 @@ async function runRefresh() {
 
     for (const want of wants) {
       try {
+        /*
+         * CERCA OFFERTE
+         */
         const offers =
           await searchAllProviders(
             want.product
           );
 
         if (
-          offers.length === 0
+          offers.length ===
+          0
         ) {
           results.push({
             id:
@@ -268,8 +292,20 @@ async function runRefresh() {
           continue;
         }
 
+        /*
+         * I provider restituiscono già
+         * normalmente i risultati ordinati,
+         * ma ordiniamo di nuovo per sicurezza.
+         */
         const bestOffer =
-          offers[0];
+          [...offers].sort(
+            (
+              a,
+              b
+            ) =>
+              a.price -
+              b.price
+          )[0];
 
         const targetPrice =
           want.target_price !==
@@ -284,9 +320,12 @@ async function runRefresh() {
           bestOffer.price <=
             targetPrice;
 
-        const checkedAt =
+        const now =
           new Date().toISOString();
 
+        /*
+         * AGGIORNA WANT
+         */
         const {
           error:
             updateError,
@@ -307,10 +346,10 @@ async function runRefresh() {
                 bestOffer.url,
 
               last_checked_at:
-                checkedAt,
+                now,
 
               updated_at:
-                checkedAt,
+                now,
             })
             .eq(
               "id",
@@ -337,6 +376,12 @@ async function runRefresh() {
 
         updated++;
 
+        /*
+         * SALVA STORICO PREZZO
+         */
+        let historySaved =
+          false;
+
         const {
           error:
             historyError,
@@ -362,24 +407,32 @@ async function runRefresh() {
                 bestOffer.url,
 
               checked_at:
-                checkedAt,
+                now,
             });
 
         if (historyError) {
           console.error(
-            `PRICE HISTORY ERROR for WANT ${want.id}:`,
+            `PRICE HISTORY ERROR (${want.id}):`,
             historyError
           );
         } else {
           historyInserted++;
+          historySaved = true;
         }
 
-        let emailSent = false;
-        let notificationsEnabled = false;
+        /*
+         * PREFERENZE EMAIL
+         */
+        let emailSent =
+          false;
+
+        let notificationsEnabled =
+          true;
 
         const {
           data: profile,
-          error: profileError,
+          error:
+            profileError,
         } =
           await supabaseServer
             .from("profiles")
@@ -392,16 +445,14 @@ async function runRefresh() {
             )
             .maybeSingle();
 
-        if (profileError) {
-          console.error(
-            `PROFILE SETTINGS ERROR for ${want.user_id}:`,
-            profileError
-          );
+        if (
+          !profileError &&
+          profile
+        ) {
+          notificationsEnabled =
+            profile.email_notifications !==
+            false;
         }
-
-        notificationsEnabled =
-          profile?.email_notifications ===
-          true;
 
         const lastNotifiedPrice =
           want.last_notified_price !==
@@ -411,6 +462,14 @@ async function runRefresh() {
               )
             : null;
 
+        /*
+         * Inviamo l'alert:
+         *
+         * - se le notifiche sono abilitate
+         * - se il target è stato raggiunto
+         * - se non abbiamo mai notificato
+         *   oppure il prezzo è ancora sceso
+         */
         const shouldNotify =
           notificationsEnabled &&
           reachedTarget &&
@@ -421,10 +480,16 @@ async function runRefresh() {
               lastNotifiedPrice
           );
 
-        if (shouldNotify) {
+        if (
+          shouldNotify &&
+          targetPrice !==
+            null
+        ) {
           const {
-            data: userData,
-            error: userError,
+            data:
+              userData,
+            error:
+              userError,
           } =
             await supabaseServer
               .auth
@@ -433,69 +498,84 @@ async function runRefresh() {
                 want.user_id
               );
 
-          if (userError) {
+          if (
+            userError
+          ) {
             console.error(
-              `USER LOOKUP ERROR for ${want.user_id}:`,
+              `USER EMAIL ERROR (${want.id}):`,
               userError
             );
           }
 
-          if (
-            !userError &&
-            userData.user?.email
-          ) {
-            await sendTargetEmail({
-              email:
-                userData.user.email,
+          const email =
+            userData.user
+              ?.email;
 
-              product:
-                want.product,
+          if (email) {
+            const sent =
+              await sendTargetEmail({
+                email,
 
-              price:
-                bestOffer.price,
+                product:
+                  want.product,
 
-              targetPrice:
-                targetPrice!,
+                price:
+                  bestOffer.price,
 
-              store:
-                bestOffer.store,
+                targetPrice,
 
-              url:
-                bestOffer.url,
-            });
+                store:
+                  bestOffer.store,
 
-            const {
-              error:
-                notificationUpdateError,
-            } =
-              await supabaseServer
-                .from("wants")
-                .update({
-                  last_notified_price:
-                    bestOffer.price,
+                url:
+                  bestOffer.url,
+              });
 
-                  last_notified_at:
-                    new Date().toISOString(),
-                })
-                .eq(
-                  "id",
-                  want.id
-                );
+            /*
+             * Segniamo come notificato
+             * SOLTANTO se Resend ha
+             * realmente inviato l'email.
+             */
+            if (sent) {
+              const {
+                error:
+                  notificationUpdateError,
+              } =
+                await supabaseServer
+                  .from(
+                    "wants"
+                  )
+                  .update({
+                    last_notified_price:
+                      bestOffer.price,
 
-            if (
-              notificationUpdateError
-            ) {
-              console.error(
-                `NOTIFICATION UPDATE ERROR for WANT ${want.id}:`,
+                    last_notified_at:
+                      now,
+                  })
+                  .eq(
+                    "id",
+                    want.id
+                  );
+
+              if (
                 notificationUpdateError
-              );
-            } else {
-              notified++;
-              emailSent = true;
+              ) {
+                console.error(
+                  `NOTIFICATION UPDATE ERROR (${want.id}):`,
+                  notificationUpdateError
+                );
+              } else {
+                notified++;
+                emailSent =
+                  true;
+              }
             }
           }
         }
 
+        /*
+         * RISULTATO DEBUG/API
+         */
         results.push({
           id:
             want.id,
@@ -524,12 +604,16 @@ async function runRefresh() {
             bestOffer.title,
 
           lastCheckedAt:
-            checkedAt,
+            now,
 
-          historySaved:
-            !historyError,
+          historySaved,
         });
       } catch (error) {
+        console.error(
+          `REFRESH WANT ERROR (${want.id}):`,
+          error
+        );
+
         results.push({
           id:
             want.id,
@@ -561,6 +645,11 @@ async function runRefresh() {
       results,
     });
   } catch (error) {
+    console.error(
+      "REFRESH ERROR:",
+      error
+    );
+
     return NextResponse.json(
       {
         error:
@@ -579,7 +668,9 @@ export async function GET(
   request: NextRequest
 ) {
   if (
-    !isAuthorized(request)
+    !isAuthorized(
+      request
+    )
   ) {
     return NextResponse.json(
       {
@@ -599,7 +690,9 @@ export async function POST(
   request: NextRequest
 ) {
   if (
-    !isAuthorized(request)
+    !isAuthorized(
+      request
+    )
   ) {
     return NextResponse.json(
       {
