@@ -8,6 +8,9 @@ type ProductPageProps = {
   }>;
 };
 
+const BASE_URL =
+  "https://www.wantpilot.app";
+
 const PRODUCT_NAMES: Record<string, string> = {
   "rtx-5070": "RTX 5070",
   "rtx-5070-ti": "RTX 5070 Ti",
@@ -52,27 +55,48 @@ const UPPERCASE_WORDS = new Set([
   "wifi",
 ]);
 
-function formatProductName(slug: string) {
-  const decoded = decodeURIComponent(slug).toLowerCase();
+function formatProductName(
+  slug: string
+) {
+  const decoded =
+    decodeURIComponent(
+      slug
+    ).toLowerCase();
 
-  if (PRODUCT_NAMES[decoded]) {
-    return PRODUCT_NAMES[decoded];
+  if (
+    PRODUCT_NAMES[
+      decoded
+    ]
+  ) {
+    return PRODUCT_NAMES[
+      decoded
+    ];
   }
 
   return decoded
     .split("-")
     .filter(Boolean)
     .map((word) => {
-      if (UPPERCASE_WORDS.has(word)) {
+      if (
+        UPPERCASE_WORDS.has(
+          word
+        )
+      ) {
         return word.toUpperCase();
       }
 
-      if (/^m\d$/i.test(word)) {
+      if (
+        /^m\d$/i.test(
+          word
+        )
+      ) {
         return word.toUpperCase();
       }
 
       return (
-        word.charAt(0).toUpperCase() +
+        word
+          .charAt(0)
+          .toUpperCase() +
         word.slice(1)
       );
     })
@@ -82,17 +106,25 @@ function formatProductName(slug: string) {
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  const { slug } = await params;
+  const {
+    slug,
+  } = await params;
 
-  const product = formatProductName(slug);
+  const product =
+    formatProductName(
+      slug
+    );
 
-  const canonical = `/products/${encodeURIComponent(slug)}`;
+  const canonical =
+    `${BASE_URL}/products/${encodeURIComponent(
+      slug
+    )}`;
 
   const title =
     `${product} Price Tracker – Compare Prices & Set Alerts`;
 
   const description =
-    `Compare current ${product} prices, find available offers and set your target price. WANT keeps checking prices so you don't have to.`;
+    `Compare current ${product} prices, find trusted offers and set your target price. WANTPILOT keeps checking prices so you don't have to.`;
 
   return {
     title,
@@ -104,23 +136,48 @@ export async function generateMetadata({
 
     openGraph: {
       type: "website",
-      title: `${product} Price Tracker | WANT`,
+
+      title:
+        `${product} Price Tracker | WANTPILOT`,
+
       description:
-        `Compare current ${product} offers and set the price you want to pay.`,
-      url: canonical,
-      siteName: "WANT",
+        `Compare current ${product} offers and set the price you want to pay with WANTPILOT.`,
+
+      url:
+        canonical,
+
+      siteName:
+        "WANTPILOT",
     },
 
     twitter: {
-      card: "summary_large_image",
-      title: `${product} Price Tracker | WANT`,
+      card:
+        "summary_large_image",
+
+      title:
+        `${product} Price Tracker | WANTPILOT`,
+
       description:
-        `Compare ${product} prices and create a price alert with WANT.`,
+        `Compare ${product} prices and create a price alert with WANTPILOT.`,
     },
 
     robots: {
       index: true,
       follow: true,
+
+      googleBot: {
+        index: true,
+        follow: true,
+
+        "max-image-preview":
+          "large",
+
+        "max-snippet":
+          -1,
+
+        "max-video-preview":
+          -1,
+      },
     },
   };
 }
@@ -128,9 +185,14 @@ export async function generateMetadata({
 export default async function ProductPage({
   params,
 }: ProductPageProps) {
-  const { slug } = await params;
+  const {
+    slug,
+  } = await params;
 
-  const product = formatProductName(slug);
+  const product =
+    formatProductName(
+      slug
+    );
 
   return (
     <ProductPageClient
